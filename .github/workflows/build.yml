@@ -255,7 +255,8 @@ jobs:
           names = ('ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD')
           missing = [name for name in names if not os.environ.get(name)]
           if missing:
-              raise SystemExit('Missing signing secrets: ' + ', '.join(missing))
+              print('::warning::Missing signing secrets: ' + ', '.join(missing) + ' — building unsigned release (debug APK will still be installable)')
+              raise SystemExit(0)
           path = pathlib.Path('app/opencode.jks')
           if path.exists():
               raise SystemExit('Refusing to replace an existing signing key')
@@ -283,8 +284,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          NAME="opencode-android-${{ github.run_number }}.apk"
-          cp app/build/outputs/apk/release/app-release.apk "$NAME"
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            NAME="opencode-android-${{ github.run_number }}.apk"
+            APK=app/build/outputs/apk/release/app-release.apk
+            KIND=release
+          else
+            NAME="opencode-android-${{ github.run_number }}-debug.apk"
+            APK=app/build/outputs/apk/debug/app-debug.apk
+            KIND=debug
+          fi
+          echo "Publishing $KIND APK: $NAME"
+          cp "$APK" "$NAME"
           for tag in apk-latest "build-${{ github.run_number }}"; do
             if ! gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
               gh release create "$tag" --repo "${{ github.repository }}" --title "OpenCode Android build ${{ github.run_number }}" --notes "Automated build of commit ${{ github.sha }}" >/dev/null
